@@ -209,3 +209,53 @@ KI <- function(models_list, input_dim)
 	}
 	return(list(KI=sum*2/(partitions*(partitions-1)), minsetsize=min_set, averagesetsize=(length(which(best_sets!=0))/partitions)))
 }
+#_______________________________________________________________________________#
+# Args:
+#	data: nxm matrix
+#	labels: 1xn matrix containing labels of the n rows of 'data'. Entries are -1 or 1.
+#	paired: logical. Default is FALSE. If set to TRUE, samples are assumed to be paired in both classes.
+#
+# Return:	A two-columns matrix. First column is named "Feature id" and contains the 1:m indexes of the features ordred by decreasing discrimintation capacity in the sense of a t-test.
+#			Second column is named "p-value" and contains the p-values corresponding to the indexes of the first column. On one row of the matrix is thus recorded a pair (feature id, p-value).
+#
+rankTTest<-function(data,labels,paired=FALSE){
+	library(genefilter)
+	if(paired){cat("PAIRED TEST\n")}
+	welchTest=colFtests(data,as.factor(labels),var.equal=paired)
+	welchTest$p.value[which(!is.finite(welchTest$p.value))]=Inf
+	sortedFeats=sort(welchTest$p.value, index.return=TRUE)
+	Res=matrix(nrow=dim(data)[2],ncol=2)
+	rownames=NULL;
+	colnames=c("Feature id","p-Value");
+	dimnames(Res)=list(rownames,colnames);
+	Res[,1]=sortedFeats$ix
+	Res[,2]=sortedFeats$x
+	return(Res);	
+}
+#_______________________________________________________________________________#
+# Args:
+#	featsLists: A nxm matrix where n is the number of dimension list and m is the number of dimensions in each list.
+#	totalDim: Integer. Total number of dimensions within which the dimensions have been selected. This is used only with 'Kuncheva' index.
+#	type: 'Kuncheva' or 'Jaccard'. Jaccard index is the ratio of the intersection size and the union size for two lists of indexes. 
+#		  The Kuncheva index takes into account corrective terms, according to the 'chance' that tw indexes could have been selected randomly.  
+#
+# Return: The value of the mean Kuncheva or Jaccard index computed on all pairs of lists in featsLists.
+#
+
+stability<-function(featsLists,totalDim=NULL,type="Kuncheva"){ 
+	sigSize=dim(featsLists)[2]
+	nbLists=dim(featsLists)[1]
+	t=0
+	for(i in 1:(nbLists-1)){
+		for(j in (i+1):nbLists){
+			if(type=="Kuncheva"){
+				t=t+(length(intersect(featsLists[i,],featsLists[j,]))-sigSize^2/totalDim)/(sigSize-sigSize^2/totalDim)
+			}
+			else if(type=="Jaccard"){
+				t=t+(length(intersect(featsLists[i,],featsLists[j,])))/(length(union(featsLists[i,],featsLists[j,])))
+			}
+		}
+	}
+	t=2*t/(nbLists*(nbLists-1))
+	return(t)
+}
